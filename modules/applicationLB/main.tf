@@ -4,17 +4,20 @@ locals {
   backends  = local.lb_config.backends
   routing   = local.lb_config.routing
   
+  # NEW: Split the backends based on type
+  compute_backends = { for k, v in local.backends : k => v if lookup(v, "backend_type", "") != "BUCKET" }
+  bucket_backends  = { for k, v in local.backends : k => v if lookup(v, "backend_type", "") == "BUCKET" }
+
+  # Filter health checks ONLY from the compute backends
   health_checks = { 
-    for k, v in local.backends : k => v 
+    for k, v in local.compute_backends : k => v 
     if lookup(v, "health_check", null) != null 
   }
 
-  # EDGE CASE ROUTING LOGIC
   is_global         = var.scope == "global"
   is_regional       = var.scope == "regional"
   is_cross_regional = var.scope == "cross-regional"
 
-  # Cross-regional ILBs use GLOBAL backends/maps, but a REGIONAL forwarding rule.
   use_global_resources = local.is_global || local.is_cross_regional
   use_region_resources = local.is_regional
 
@@ -24,7 +27,12 @@ locals {
   lb_scheme = var.exposure == "external" ? "EXTERNAL_MANAGED" : "INTERNAL_MANAGED"
 }
 
-
+locals {
+  all_backend_ids = merge(
+    { for k, v in google_compute_backend_service.global : k => v.id },
+    { for k, v in google_compute_backend_bucket.buckets : k => v.id }
+  )
+}
 data "google_compute_global_address" "static_ip" {
   count   = lookup(local.config, "frontend_ip_type", "ephemeral") == "static" ? 1 : 0
   name    = local.config.frontend_ip_name
@@ -57,15 +65,17 @@ resource "google_compute_region_health_check" "regional" {
 }
 
 resource "google_compute_backend_service" "global" {
-  for_each = { for k, v in local.backends : k => v if local.use_global_resources }
+  for_each              = { for k, v in local.compute_backends : k => v if local.use_global_resources }
   name                  = "${var.lb_name}-${each.key}"
   project               = var.gcp_project_id
   load_balancing_scheme = local.lb_scheme
-  health_checks         = lookup(each.value, "health_check", null) != null ? [google_compute_health_check.global[each.key].id] : []
+  
   log_config {
     enable      = lookup(each.value, "enable_logging", false)
-    sample_rate = 1.0 # Logs 100% of requests if enabled
+    sample_rate = 1.0
   }
+
+  health_checks = lookup(each.value, "health_check", null) != null ? [google_compute_health_check.global[each.key].id] : []
 }
 
 resource "google_compute_region_backend_service" "regional" {
@@ -77,6 +87,15 @@ resource "google_compute_region_backend_service" "regional" {
   health_checks         = lookup(each.value, "health_check", null) != null ? [google_compute_region_health_check.regional[each.key].id] : []
 }
 
+
+resource "google_compute_backend_bucket" "buckets" {
+  for_each    = { for k, v in local.bucket_backends : k => v if local.use_global_resources }
+  name        = "${var.lb_name}-${each.key}"
+  project     = var.gcp_project_id
+  bucket_name = each.key # Assumes the JSON key is the exact name of your GCS bucket
+  enable_cdn  = lookup(each.value, "enable_cdn", false)
+}
+
 # ------------------------------------------------------------------------------
 # 2. URL MAPS & ROUTING
 # ------------------------------------------------------------------------------
@@ -84,8 +103,10 @@ resource "google_compute_url_map" "global" {
   count           = local.use_global_resources ? 1 : 0
   name            = "${var.lb_name}-url-map"
   project         = var.gcp_project_id
-  default_service = try(google_compute_backend_service.global[keys(local.backends)[0]].id, "")
   
+  # Fetch the ID safely from the merged master list
+  default_service = try(local.all_backend_ids[keys(local.backends)[0]], "")
+
   dynamic "host_rule" {
     for_each = try(local.routing.host_rules, [])
     content {
@@ -93,16 +114,18 @@ resource "google_compute_url_map" "global" {
       path_matcher = "matcher-${host_rule.key}"
     }
   }
+  
   dynamic "path_matcher" {
     for_each = try(local.routing.host_rules, [])
     content {
       name            = "matcher-${path_matcher.key}"
-      default_service = try(google_compute_backend_service.global[path_matcher.value.backend].id, "")
+      default_service = try(local.all_backend_ids[path_matcher.value.backend], "")
+      
       dynamic "path_rule" {
         for_each = try(local.routing.path_rules, [])
         content {
           paths   = [path_rule.value.path]
-          service = try(google_compute_backend_service.global[path_rule.value.backend].id, "")
+          service = try(local.all_backend_ids[path_rule.value.backend], "")
         }
       }
     }
