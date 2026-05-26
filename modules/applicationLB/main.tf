@@ -36,7 +36,7 @@ data "google_compute_global_address" "static_ip" {
 # 1. HEALTH CHECKS & BACKENDS (Split by Region vs Global)
 # ------------------------------------------------------------------------------
 resource "google_compute_health_check" "global" {
-  for_each = local.use_global_resources ? local.health_checks : {}
+  for_each = { for k, v in local.health_checks : k => v if local.use_global_resources }
   name     = "${var.lb_name}-${each.key}-hc"
   project  = var.gcp_project_id
   http_health_check {
@@ -46,7 +46,7 @@ resource "google_compute_health_check" "global" {
 }
 
 resource "google_compute_region_health_check" "regional" {
-  for_each = local.use_region_resources ? local.health_checks : {}
+  for_each = { for k, v in local.health_checks : k => v if local.use_region_resources }
   name     = "${var.lb_name}-${each.key}-hc"
   project  = var.gcp_project_id
   region   = var.region
@@ -57,7 +57,7 @@ resource "google_compute_region_health_check" "regional" {
 }
 
 resource "google_compute_backend_service" "global" {
-  for_each              = local.use_global_resources ? local.backends : {}
+  for_each = { for k, v in local.backends : k => v if local.use_global_resources }
   name                  = "${var.lb_name}-${each.key}"
   project               = var.gcp_project_id
   load_balancing_scheme = local.lb_scheme
@@ -69,7 +69,7 @@ resource "google_compute_backend_service" "global" {
 }
 
 resource "google_compute_region_backend_service" "regional" {
-  for_each              = local.use_region_resources ? local.backends : {}
+  for_each = { for k, v in local.backends : k => v if local.use_region_resources }
   name                  = "${var.lb_name}-${each.key}"
   project               = var.gcp_project_id
   region                = var.region
