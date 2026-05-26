@@ -1,5 +1,5 @@
 locals {
-  lb_config = yamldecode(var.yaml_content)
+  lb_config = yamldecode(file("lb-config.yaml"))
   config    = local.lb_config.config
   backends  = local.lb_config.backends
   routing   = local.lb_config.routing
