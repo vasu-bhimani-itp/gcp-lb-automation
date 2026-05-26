@@ -1,8 +1,7 @@
-variable "gcp_zone" {
+variable "module_name" {
   
 }
-
-variable "gcp_project_id" {
+variable "gcp_zone" {
   
 }
 
@@ -10,16 +9,28 @@ variable "gcp_region" {
   
 }
 
-
-
-variable "lb_name" {
-  type        = string
-  description = "Name of the Load Balancer"
+variable "gcp_project_id" { 
+  type = string 
+  default = "devops-sandbox-452616"
 }
 
-variable "yaml_content" {
-  type        = string
-  description = "Raw YAML configuration string pasted from GitHub Actions UI"
+variable "lb_name" { 
+  type = string
 }
 
+variable "yaml_content" { 
+  type = string 
+}
 
+variable "exposure" { 
+  type = string 
+}
+
+variable "scope" { 
+  type = string 
+}
+
+variable "region" { 
+  type    = string 
+  default = "" 
+}

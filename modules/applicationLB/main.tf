@@ -28,7 +28,7 @@ locals {
 data "google_compute_global_address" "static_ip" {
   count   = lookup(local.config, "frontend_ip_type", "ephemeral") == "static" ? 1 : 0
   name    = local.config.frontend_ip_name
-  project = var.project_id
+  project = var.gcp_project_id
 }
 
 
@@ -38,7 +38,7 @@ data "google_compute_global_address" "static_ip" {
 resource "google_compute_health_check" "global" {
   for_each = local.use_global_resources ? local.health_checks : {}
   name     = "${var.lb_name}-${each.key}-hc"
-  project  = var.project_id
+  project  = var.gcp_project_id
   http_health_check {
     port         = each.value.health_check.port
     request_path = each.value.health_check.path
@@ -48,7 +48,7 @@ resource "google_compute_health_check" "global" {
 resource "google_compute_region_health_check" "regional" {
   for_each = local.use_region_resources ? local.health_checks : {}
   name     = "${var.lb_name}-${each.key}-hc"
-  project  = var.project_id
+  project  = var.gcp_project_id
   region   = var.region
   http_health_check {
     port         = each.value.health_check.port
@@ -59,7 +59,7 @@ resource "google_compute_region_health_check" "regional" {
 resource "google_compute_backend_service" "global" {
   for_each              = local.use_global_resources ? local.backends : {}
   name                  = "${var.lb_name}-${each.key}"
-  project               = var.project_id
+  project               = var.gcp_project_id
   load_balancing_scheme = local.lb_scheme
   health_checks         = lookup(each.value, "health_check", null) != null ? [google_compute_health_check.global[each.key].id] : []
   log_config {
@@ -71,7 +71,7 @@ resource "google_compute_backend_service" "global" {
 resource "google_compute_region_backend_service" "regional" {
   for_each              = local.use_region_resources ? local.backends : {}
   name                  = "${var.lb_name}-${each.key}"
-  project               = var.project_id
+  project               = var.gcp_project_id
   region                = var.region
   load_balancing_scheme = local.lb_scheme
   health_checks         = lookup(each.value, "health_check", null) != null ? [google_compute_region_health_check.regional[each.key].id] : []
@@ -83,7 +83,7 @@ resource "google_compute_region_backend_service" "regional" {
 resource "google_compute_url_map" "global" {
   count           = local.use_global_resources ? 1 : 0
   name            = "${var.lb_name}-url-map"
-  project         = var.project_id
+  project         = var.gcp_project_id
   default_service = try(google_compute_backend_service.global[keys(local.backends)[0]].id, "")
   
   dynamic "host_rule" {
@@ -114,7 +114,7 @@ resource "google_compute_url_map" "global" {
 resource "google_compute_url_map" "https_redirect" {
   count   = lookup(local.config, "enable_http_redirect", false) ? 1 : 0
   name    = "${var.lb_name}-https-redirect"
-  project = var.project_id
+  project = var.gcp_project_id
 
   default_url_redirect {
     https_redirect         = true
@@ -127,7 +127,7 @@ resource "google_compute_url_map" "https_redirect" {
 resource "google_compute_region_url_map" "regional" {
   count           = local.use_region_resources ? 1 : 0
   name            = "${var.lb_name}-url-map"
-  project         = var.project_id
+  project         = var.gcp_project_id
   region          = var.region
   default_service = try(google_compute_region_backend_service.regional[keys(local.backends)[0]].id, "")
 
@@ -160,7 +160,7 @@ resource "google_compute_region_url_map" "regional" {
 resource "google_compute_target_http_proxy" "global" {
   count   = local.use_global_resources && !lookup(local.config, "enable_https", false) ? 1 : 0
   name    = "${var.lb_name}-http-proxy"
-  project = var.project_id
+  project = var.gcp_project_id
   url_map = lookup(local.config, "enable_http_redirect", false) ? google_compute_url_map.https_redirect[0].id : google_compute_url_map.global[0].id
 
 }
@@ -168,7 +168,7 @@ resource "google_compute_target_http_proxy" "global" {
 resource "google_compute_region_target_http_proxy" "regional" {
   count   = local.use_region_resources && !lookup(local.config, "enable_https", false) ? 1 : 0
   name    = "${var.lb_name}-http-proxy"
-  project = var.project_id
+  project = var.gcp_project_id
   region  = var.region
   url_map = google_compute_region_url_map.regional[0].id
 }
@@ -179,7 +179,7 @@ resource "google_compute_region_target_http_proxy" "regional" {
 resource "google_compute_global_forwarding_rule" "global" {
   count                 = local.use_global_forwarding_rule ? 1 : 0
   name                  = "${var.lb_name}-frontend"
-  project               = var.project_id
+  project               = var.gcp_project_id
   load_balancing_scheme = local.lb_scheme
   port_range            = lookup(local.config, "enable_https", false) ? "443" : "80"
   target                = google_compute_target_http_proxy.global[0].id # Expand for HTTPS logic if needed
@@ -190,7 +190,7 @@ resource "google_compute_global_forwarding_rule" "global" {
 resource "google_compute_forwarding_rule" "regional" {
   count                 = local.use_region_forwarding_rule ? 1 : 0
   name                  = "${var.lb_name}-frontend"
-  project               = var.project_id
+  project               = var.gcp_project_id
   region                = var.region
   load_balancing_scheme = local.lb_scheme
   port_range            = lookup(local.config, "enable_https", false) ? "443" : "80"
