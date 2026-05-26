@@ -29,7 +29,7 @@ variable "region" {
   default = "" 
 }
 
-variable "yaml_file_path" {
+variable "json_file_path" {
   type        = string
   description = "Absolute path to the YAML configuration file"
 }
