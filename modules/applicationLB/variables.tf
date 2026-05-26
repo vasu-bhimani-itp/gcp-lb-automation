@@ -23,3 +23,8 @@ variable "region" {
   type    = string 
   default = "" 
 }
+
+variable "yaml_file_path" {
+  type        = string
+  description = "Absolute path to the YAML configuration file"
+}

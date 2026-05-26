@@ -8,5 +8,5 @@ module "applicationLB" {
   exposure       = var.exposure
   scope          = var.scope
   gcp_region = var.gcp_region
-
+  yaml_file_path = var.yaml_file_path
 }
