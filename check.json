@@ -27,9 +27,10 @@
       }
     },
     "assets-bucket": {
-      "backend_type": "BUCKET",
-      "enable_cdn": true,
-      "enable_logging": false
+          "backend_type": "BUCKET",
+          "bucket_name": "vasu_workbench_automation",
+          "enable_cdn": true,
+          "enable_logging": false
     }
   },
   "routing": {

@@ -92,7 +92,10 @@ resource "google_compute_backend_bucket" "buckets" {
   for_each    = { for k, v in local.bucket_backends : k => v if local.use_global_resources }
   name        = "${var.lb_name}-${each.key}"
   project     = var.gcp_project_id
-  bucket_name = each.key # Assumes the JSON key is the exact name of your GCS bucket
+  
+  # NEW: Look for an explicit bucket name in the JSON. If not found, fall back to the key.
+  bucket_name = lookup(each.value, "bucket_name", each.key) 
+  
   enable_cdn  = lookup(each.value, "enable_cdn", false)
 }
 
