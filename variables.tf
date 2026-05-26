@@ -1,9 +1,7 @@
 variable "module_name" {
   
 }
-variable "gcp_zone" {
-  
-}
+
 
 variable "gcp_region" {
   
